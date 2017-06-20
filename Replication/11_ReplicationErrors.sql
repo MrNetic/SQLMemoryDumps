@@ -1,0 +1,7 @@
+SELECT TOP 1000
+*
+From MSrepl_errors
+WHERE time >='2016-03-09 12:57:43.730'
+ORDER BY time desc
+
+DBCC OPENTRAN 

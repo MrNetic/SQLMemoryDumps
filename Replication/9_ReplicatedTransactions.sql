@@ -1,0 +1,1 @@
+SELECT  * FROM dbo.MSrepl_transactions WHERE publisher_database_id=1

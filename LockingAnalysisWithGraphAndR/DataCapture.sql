@@ -1,5 +1,3 @@
-
-
 /*
 Read the section bellow carefully.
 
@@ -18,17 +16,10 @@ END
 
 --2) Create Tables
 
--- Requests
+--sessions
 CREATE TABLE [dba].[tbl_sessions](
 	[run_date] [DATETIME] NOT NULL,
-	[session_id] [SMALLINT] NOT NULL,
-	[login_time] [DATETIME] NOT NULL,
-	[host_name] [NVARCHAR](128) NULL,
-	[program_name] [NVARCHAR](128) NULL,
-	[host_process_id] [INT] NULL,
-	[login_name] [NVARCHAR](128) NOT NULL,
-	[status] [NVARCHAR](30) NOT NULL,
-	[last_request_end_time] [DATETIME] NULL,
+	[session_id] [SMALLINT] NOT NULL
 	INDEX ixc clustered (run_date)
 ) 
 AS node
@@ -72,18 +63,9 @@ AS edge
 */
 
 -- Bellow is the code to run to save locking activity
--- 
 
---- Nota, experimentar uma tabela com os blocking
---- E outra tabela com os processos
---- E depois outra tabela com todos os processos bloqueados
---- 
-
-DECLARE @rscript NVARCHAR(2000)
-DECLARE @rinputdata NVARCHAR(2000)
 DECLARE @run_date AS DATETIME
--- Output Location, note: include the last \\
-DECLARE @igraphoutputlocation NVARCHAR(200) = 'F:\\WorkAux\\DBA\\BlockingGraphs\\'
+
 SET @run_date =(SELECT GETDATE())
 
 
@@ -168,13 +150,7 @@ FROM   sys.dm_exec_sessions AS s
 WHERE  r.session_id != @@SPID;
 
 
-
---SELECT * INTO #requests FROM [.\sql2016].gbeodin_poc.dba.tbl_Requests
---WHERE Instance_id =31
---AND run_date='2017-07-17 07:55:01.000'
-
-
--- Create Blocking Edge
+-- Populate Blocking Edge
 
 INSERT INTO dba.tbl_blocked 
 SELECT sessions.$node_id,details.$node_id,sessions.run_date FROM dba.tbl_sessions sessions
@@ -183,176 +159,10 @@ dba.tbl_request_details details
 ON sessions.session_id=details.session_id
 AND sessions.run_date=details.run_date
 WHERE details.run_date=@run_date
+AND details.blocking_session_id !=0
 
+-- For Reference
+SELECT @run_date
 
-/*
-Aux Query
-SELECT		sessions.session_id AS SessionID,
-			details.host_name AS HostName,
-			details.command_text AS CommandText,
-			details.wait_type AS WaitType,
-			details.wait_resource AS WaitResource,
-			details.blocking_session_id AS BlockerSessionID,
-			ISNULL((SELECT host_name FROM dba.tbl_request_details WHERE session_id= details.blocking_session_id AND run_date=blocked.run_date),0) as BlockerProcssHostName,
-			ISNULL((SELECT command_text FROM dba.tbl_request_details WHERE session_id= details.blocking_session_id AND run_date=blocked.run_date),0) AS BlockerCommandText,
-			ISNULL((SELECT wait_type FROM dba.tbl_request_details WHERE session_id= details.blocking_session_id AND run_date=blocked.run_date),0) as BlockerProcessWaitType,
-			ISNULL((SELECT wait_resource FROM dba.tbl_request_details WHERE session_id= details.blocking_session_id AND run_date=blocked.run_date),0) as BlockerProcessWaitResource,
-			ISNULL((SELECT wait_time FROM dba.tbl_request_details WHERE session_id= details.blocking_session_id AND run_date=blocked.run_date),0) AS BlockerProcessWaitTime
-	
-
-FROM dba.tbl_sessions sessions, dba.tbl_blocked blocked, dba.tbl_request_details details
-WHERE MATCH(sessions-(blocked)->details)
-AND blocked.run_date='2017-07-17 07:55:01.000'	
-
-*/
-
-SET @rscript= N'
-require(igraph)
-
-g <- graph.data.frame(graphdf)
-
-V(g)$label.cex <- 2
-
-jpeg(filename = "'+@igraphoutputlocation+
-REPLACE(CONVERT (VARCHAR(24), @run_date,126),':','')+'_blockingAnalysis.jpeg", height = 4000, width = 5000, res = 150);
-plot(g, vertex.label.family = "sans", vertex.size = 4)
-dev.off()
-'
-
-SET @rinputdata = N'SELECT sessions.session_id,details.blocking_session_id,details.host_name
-FROM dba.tbl_sessions sessions, dba.tbl_blocked blocked, dba.tbl_request_details details
-WHERE MATCH(sessions-(blocked)->details)
-AND blocked.run_date=''' + '2017-07-17 07:55:01.000'+''''
---AND blocked.run_date=''' + CONVERT (CHAR(24), @run_date,126)+''''
-
-
-
-	EXEC sp_execute_external_script @language = N'R',
-	@script =@rscript,
-	@input_data_1 =@rinputdata,
-	@input_data_1_name = N'graphdf'
-
-
-
-	-- second example by hostname
-	SET @rscript= N'
-require(igraph)
-
-g <- graph.data.frame(graphdf)
-
-V(g)$label.cex <- 2
-
-jpeg(filename = "'+@igraphoutputlocation+
-REPLACE(CONVERT (VARCHAR(24), @run_date,126),':','')+'_blockingAnalysis_ByHostname.jpeg",height = 4000, width = 5000, res = 100);
-plot(g, vertex.label.family = "sans", vertex.size = 4)
-dev.off()
-'
-
-SET @rinputdata = N'select 
-			details.host_name AS HostName,
-			ISNULL((SELECT host_name FROM dba.tbl_request_details WHERE session_id= details.blocking_session_id AND run_date=blocked.run_date),''NotBlocked :)'') as BlockerProcssHostName
-			
-			
-FROM dba.tbl_sessions sessions, dba.tbl_blocked blocked, dba.tbl_request_details details
-WHERE MATCH(sessions-(blocked)->details)
-AND blocked.run_date=''' + '2017-07-17 07:55:01.000'+''''
---AND blocked.run_date=''' + CONVERT (CHAR(24), @run_date,126)+''''
-
-
-
-	EXEC sp_execute_external_script @language = N'R',
-	@script =@rscript,
-	@input_data_1 =@rinputdata,
-	@input_data_1_name = N'graphdf'
-
-	-- second example by Command Text
-	SET @rscript= N'
-require(igraph)
-
-g <- graph.data.frame(graphdf)
-
-V(g)$label.cex <- 2
-
-jpeg(filename = "'+@igraphoutputlocation+
-REPLACE(CONVERT (VARCHAR(24), @run_date,126),':','')+'_blockingAnalysis_ByCommandText.jpeg", height = 4000, width = 5000, res = 150);
-plot(g, vertex.label.family = "sans", vertex.size = 4)
-dev.off()
-'
-
-SET @rinputdata = N'SELECT
-			details.command_text AS CommandText,
-			ISNULL((SELECT command_text FROM dba.tbl_request_details WHERE session_id= details.blocking_session_id AND run_date=blocked.run_date),''NotBlocked :)'') AS BlockerCommandText
-	
-
-FROM dba.tbl_sessions sessions, dba.tbl_blocked blocked, dba.tbl_request_details details
-WHERE MATCH(sessions-(blocked)->details)
-AND blocked.run_date=''' + '2017-07-17 07:55:01.000'+''''
-
-
-SELECT @rinputdata
---AND blocked.run_date=''' + CONVERT (CHAR(24), @run_date,126)+''''
-
-
-
-EXEC sp_execute_external_script @language = N'R',
-	@script =@rscript,
-	@input_data_1 =@rinputdata,
-	@input_data_1_name = N'graphdf'
-
-
-	
-
-
-
---IF (EXISTS (SELECT TOP 1 run_date FROM dba.tbl_blocked WHERE run_date=@run_date))
---BEGIN
---	EXEC sp_execute_external_script @language = N'R',
---	@script =@rscript,
---	@input_data_1 =@rinputdata,
---	@input_data_1_name = N'graphdf'
---END 
-
-
-
-
-/*
-
-
-
-
-Msg 39023, Level 16, State 1, Procedure sp_execute_external_script, Line 1 [Batch Start Line 0]
-'sp_execute_external_script' is disabled on this instance of SQL Server. Use sp_configure 'external scripts enabled' to enable it.
-
-
-sp_configure 'external scripts enabled', 1
-
-RECONFIGURE
-
--- service needs to be reconfigured
-
-ADD URL ON installing this STUFF
-
---
-
-
-
-exec sp_execute_external_script @language = N'R',
-@script = N'
-require(igraph)
-
-g <- graph.data.frame(graphdf)
-
-V(g)$label.cex <- 2
-
-jpeg(filename = "F:\WorkAux\DBA\BlockingGraphs\\blockingAnalysis.jpeg", height = 10000, width = 10000, res = 100);
-plot(g, vertex.label.family = "sans", vertex.size = 6)
-dev.off()
-',
-@input_data_1 = N'SELECT requests.session_id,details.blocking_session_id,details.host_name
-FROM dba.tbl_requests requests, dba.tbl_blocked blocked, dba.tbl_request_details details
-WHERE MATCH(requests-(blocked)->details)
-',
-@input_data_1_name = N'graphdf'
-GO
-
-*/
+SELECT * FROM dba.tbl_blocked
+WHERE run_date=@run_date

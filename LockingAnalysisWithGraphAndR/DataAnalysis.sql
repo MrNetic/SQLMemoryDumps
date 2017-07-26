@@ -5,13 +5,7 @@ DECLARE @run_date AS DATETIME
 DECLARE @igraphoutputlocation NVARCHAR(200) = 'F:\\WorkAux\\DBA\\BlockingGraphs\\'
 
 SET @run_date = '2017-06-10 07:55:01.000'
-SET @rinputdata = N'SELECT sessions.session_id,details.blocking_session_id,details.host_name
-FROM dba.tbl_sessions sessions, dba.tbl_blocked blocked, dba.tbl_request_details details
-WHERE MATCH(sessions-(blocked)->details)
-AND blocked.run_date=''' + CONVERT (CHAR(19), @run_date,126)+''''
 
-
-SELECT @rinputdata
 /*
 Aux Query
 SELECT		sessions.session_id AS SessionID,
@@ -39,9 +33,10 @@ g <- graph.data.frame(graphdf)
 
 V(g)$label.cex <- 2
 
+
 jpeg(filename = "'+@igraphoutputlocation+
 REPLACE(CONVERT (VARCHAR(24), @run_date,126),':','')+'_blockingAnalysis.jpeg", height = 4000, width = 5000, res = 150);
-plot(g, vertex.label.family = "sans", vertex.size = 4)
+plot(g, vertex.label.family = "sans", vertex.size = 5)
 dev.off()
 '
 
@@ -68,8 +63,8 @@ g <- graph.data.frame(graphdf)
 V(g)$label.cex <- 2
 
 jpeg(filename = "'+@igraphoutputlocation+
-REPLACE(CONVERT (VARCHAR(24), @run_date,126),':','')+'_blockingAnalysis_ByHostname.jpeg",height = 4000, width = 5000, res = 100);
-plot(g, vertex.label.family = "sans", vertex.size = 4)
+REPLACE(CONVERT (VARCHAR(24), @run_date,126),':','')+'_blockingAnalysis_ByHostname.jpeg",height = 5000, width = 7000, res = 200);
+plot(g, vertex.label.family = "sans", vertex.size = 5)
 dev.off()
 '
 
@@ -98,7 +93,7 @@ g <- graph.data.frame(graphdf)
 V(g)$label.cex <- 2
 
 jpeg(filename = "'+@igraphoutputlocation+
-REPLACE(CONVERT (VARCHAR(24), @run_date,126),':','')+'_blockingAnalysis_ByCommandText.jpeg", height = 4000, width = 5000, res = 150);
+REPLACE(CONVERT (VARCHAR(24), @run_date,126),':','')+'_blockingAnalysis_ByCommandText.jpeg", height = 5000, width = 7000, res = 200);
 plot(g, vertex.label.family = "sans", vertex.size = 4)
 dev.off()
 '
